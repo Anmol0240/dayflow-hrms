@@ -45,6 +45,14 @@ Transactions are controlled at the service/use-case boundary. API handlers trans
 
 Feature modules may use shared components, hooks, types, and the API client. Shared components must not import feature modules. TanStack Query owns server state; transient view state stays local. React Hook Form and Zod own form state and client validation. Authorization decisions received from the server remain authoritative.
 
+### Frontend composition and sessions
+
+`AppProviders` composes one TanStack Query client, the authentication boundary, and accessible toast delivery. The typed API client attaches bearer credentials, includes the backend-owned refresh cookie, coalesces concurrent renewals, retries an unauthorized request at most once, and preserves structured API field errors. Access tokens exist only in memory; neither access nor refresh tokens are written to `localStorage` or `sessionStorage`.
+
+The route graph separates public-only, authenticated, Employee-only, and Admin/HR branches. Guards control navigation and presentation only; backend dependencies and services remain authoritative. A responsive application layout derives navigation from the authenticated role and supplies mobile navigation, breadcrumbs, session controls, loading states, route errors, and keyboard-visible focus behavior.
+
+Reusable UI primitives live in `components/ui`; accessible form composition lives in `components/forms`; domain-specific components remain inside their feature. Foundation tests use a memory router and explicit authentication context so redirects and role navigation are verified independently of feature screens.
+
 ## Security baseline
 
 - Short-lived access JWTs and rotating/revocable refresh tokens are implemented; refresh tokens use HTTP-only, same-site cookies and are stored only as SHA-256 hashes.
@@ -53,7 +61,7 @@ Feature modules may use shared components, hooks, types, and the API client. Sha
 - CORS is an explicit environment allowlist.
 - Pydantic and database constraints validate data at multiple boundaries.
 - Payroll and employee-owned queries are scoped before data leaves the repository.
-- Sensitive mutation services are structured for audit integration; the audit table is added with the HR domain schema in Phase 5.
+- Leave decisions and payroll mutations create immutable audit events.
 
 ### Authentication boundaries
 
@@ -85,4 +93,4 @@ The stateless API can scale horizontally. Database pagination is cursor- or offs
 
 ## Incremental delivery boundaries
 
-The backend foundation and authentication module are implemented. Employee profile behavior and the remaining HR domain modules remain later-phase boundaries. Each later phase must add its own migration, schemas, repositories, services, endpoints, UI, tests, and documentation together. A module is not complete until its authorization and failure paths are tested.
+The backend foundation, authentication, HR domains, reports, and frontend foundation are implemented. Phase 7 replaces the deliberately explicit foundation screens with data-backed feature screens. Each feature must add its queries, forms, accessible states, authorization tests, and documentation together; no placeholder screen represents a completed feature.

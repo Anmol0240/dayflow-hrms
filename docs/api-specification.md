@@ -1,37 +1,61 @@
 # API specification
 
-Dayflow exposes JSON REST APIs under `/api/v1`. FastAPI publishes the authoritative OpenAPI schema at `/openapi.json` and interactive documentation at `/docs`.
+Dayflow exposes JSON REST APIs under `/api/v1`. FastAPI will publish the authoritative OpenAPI schema at `/openapi.json` and interactive documentation at `/docs`.
 
 ## Conventions
 
-- Bearer JWT access tokens protect APIs; renewal uses a rotating HTTP-only refresh cookie.
-- Collections return `items` plus stable `page`, `page_size`, `total`, and `pages` metadata.
-- Timestamps are ISO 8601; business dates use `YYYY-MM-DD`.
-- Errors use `{ "detail", "code", "field_errors" }` and never expose stack traces.
-- Role checks exist in dependencies and service methods; ownership checks occur in services.
+- Authentication uses a bearer access token; token renewal uses a secure HTTP-only cookie.
+- Collection endpoints use explicit pagination and return stable metadata.
+- Timestamps are ISO 8601 UTC values; business dates use `YYYY-MM-DD`.
+- Mutations return the resulting resource where useful and use standard HTTP status codes.
+- The common error shape is:
 
-## Authentication
+```json
+{
+  "detail": "Human-readable error message",
+  "code": "ERROR_CODE",
+  "field_errors": {}
+}
+```
 
-`POST /auth/signup`, `/login`, `/refresh`, `/logout`, `/verify-email`, `/forgot-password`, `/reset-password`, and `GET /auth/me` implement registration, session renewal, verification, and recovery. Public signup cannot create Admin or HR accounts.
+## Planned endpoint groups
 
-## HR endpoints
-
-| Group | Endpoints | Authorization |
+| Group | Prefix | Access |
 | --- | --- | --- |
-| Employees | `GET/POST /employees`, `GET/PATCH/DELETE /employees/{employee_id}` | Admin/HR; role changes require Admin |
-| Profile self-service | `GET/PATCH /employees/me` | Current user; picture, phone, address only |
-| Attendance | `POST /attendance/check-in`, `/check-out`, `GET /attendance/me`, `/summary` | Current user, own scope |
-| Attendance management | `GET /attendance`, `GET/PATCH /attendance/{record_id}` | Admin/HR; record GET also permits owner |
-| Leave self-service | `POST /leave-requests`, `GET /leave-requests/me`, `GET /leave-requests/{id}`, `POST /{id}/cancel` | Current user, ownership enforced |
-| Leave workflow | `GET /leave-requests`, `POST /leave-requests/{id}/approve`, `/{id}/reject` | Admin/HR |
-| Payroll self-service | `GET /payroll/me` | Current user, read-only |
-| Payroll management | `GET/POST /payroll`, `GET /payroll/{employee_id}`, `PATCH /payroll/{payroll_id}` | Admin/HR |
-| Notifications | `GET /notifications`, `PATCH /notifications/{id}/read`, `/notifications/read-all` | Recipient scoped |
-| Dashboards | `GET /dashboard/employee`, `/dashboard/admin` | Current user / Admin or HR |
-| Reports | `GET /reports/attendance`, `/leave`, `/payroll`, `/export` | Admin/HR |
+| Authentication | `/api/v1/auth` | Public and authenticated |
+| Dashboards | `/api/v1/dashboard` | Role-specific |
+| Employees | `/api/v1/employees` | Self-service or Admin/HR |
+| Attendance | `/api/v1/attendance` | Self-service or Admin/HR |
+| Leave | `/api/v1/leave-requests` | Self-service and approval workflow |
+| Payroll | `/api/v1/payroll` | Self read-only or Admin/HR |
+| Notifications | `/api/v1/notifications` | Recipient-scoped |
+| Reports | `/api/v1/reports` | Admin/HR |
 
-Attendance export is a downloadable CSV generated from stored records. Dashboard and report values use database aggregates rather than mocks.
+Detailed request and response schemas will be added alongside each implemented module so this document never advertises fake endpoints.
 
-## Health
+## Implemented foundation endpoints
 
-`GET /health/live` confirms the process is serving. `GET /health/ready` executes a database ping and returns a safe `DATABASE_UNAVAILABLE` error on failure. All responses include `X-Request-ID`.
+### `GET /api/v1/health/live`
+
+Confirms that the API process can serve requests. It does not access the database and returns the service name and application version.
+
+### `GET /api/v1/health/ready`
+
+Executes `SELECT 1` through the configured async SQLAlchemy engine. It returns HTTP 200 with `database: reachable`, or HTTP 503 with code `DATABASE_UNAVAILABLE`. These endpoints are public and intended for orchestrator health checks; they expose no configuration or credentials.
+
+All responses include `X-Request-ID`. A safe caller-supplied value is preserved; missing or malformed values are replaced.
+
+## Implemented authentication endpoints
+
+| Method | Path | Behavior |
+| --- | --- | --- |
+| POST | `/api/v1/auth/signup` | Creates an unverified Employee account; privileged public roles are rejected |
+| POST | `/api/v1/auth/login` | Verifies credentials and account state, returns an access JWT, and sets a refresh cookie |
+| POST | `/api/v1/auth/refresh` | Rotates the refresh token and returns a renewed access JWT |
+| POST | `/api/v1/auth/logout` | Revokes the presented refresh token and clears its cookie |
+| GET | `/api/v1/auth/me` | Returns the active, verified user represented by a bearer access token |
+| POST | `/api/v1/auth/verify-email` | Consumes a single-use email-verification token |
+| POST | `/api/v1/auth/forgot-password` | Returns a non-enumerating accepted response and requests reset delivery when eligible |
+| POST | `/api/v1/auth/reset-password` | Consumes a reset token, changes the password, and revokes active refresh tokens |
+
+Access tokens are returned only in response bodies and should be held in memory by browser clients. Refresh tokens are never returned in JSON; they use an HTTP-only cookie scoped to `/api/v1/auth`. Authentication failures use `WWW-Authenticate: Bearer` and the standard error envelope.

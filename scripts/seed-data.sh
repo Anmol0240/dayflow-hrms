@@ -1,5 +1,4 @@
 #!/usr/bin/env sh
 set -eu
 
-cd "$(dirname "$0")/../backend"
 python -m app.seed
