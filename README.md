@@ -33,24 +33,103 @@ scripts/    Portable developer workflow helpers
 
 ## Prerequisites
 
-- Node.js 22.12+ with Corepack/pnpm 11
+- Node.js 22.12+ with Corepack and pnpm 11.19.0
 - Python 3.12+
 - PostgreSQL 17+ for production-like development, or SQLite for a lightweight local run
 - Docker Engine with Docker Compose (optional)
 
-## Quick start
+## Run locally on Windows with SQLite
 
-1. Copy `.env.example` to `.env` and replace every development secret before using a shared environment.
-2. Follow [docs/setup.md](docs/setup.md) for local or Docker setup.
-3. Start the API and client in separate terminals.
+Run these commands from PowerShell. SQLite is the simplest local option and does not require Docker or PostgreSQL.
 
-```bash
-make install
-make dev-backend
-make dev-frontend
+### 1. Configure the environment
+
+```powershell
+cd D:\Dayflow
+Copy-Item .env.example .env
 ```
 
-The frontend defaults to <http://localhost:5173>. The API defaults to <http://localhost:8000>, with OpenAPI documentation at <http://localhost:8000/docs>.
+In `.env`, set the development database URL to:
+
+```env
+DAYFLOW_DATABASE_URL=sqlite+aiosqlite:///./data/dayflow.db
+```
+
+Do not commit `.env`; it is already excluded by `.gitignore`.
+
+### 2. Install dependencies
+
+```powershell
+py -3.13 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+
+python -m pip install --upgrade pip
+python -m pip install -e ".\backend[dev]"
+
+corepack install --global pnpm@11.19.0
+corepack enable pnpm
+pnpm --version
+pnpm --dir frontend install --frozen-lockfile
+```
+
+`pnpm --version` must print `11.19.0`. With older Corepack releases, use `corepack prepare pnpm@11.19.0 --activate` instead.
+
+### 3. Initialize and seed the database
+
+```powershell
+New-Item -ItemType Directory -Force data
+
+Push-Location backend
+python -m alembic upgrade head
+python -m app.seed
+Pop-Location
+```
+
+The seed command is safe to rerun and creates verified Admin, HR, and Employee development accounts.
+
+### 4. Start the backend
+
+Open the first PowerShell terminal:
+
+```powershell
+cd D:\Dayflow
+.\.venv\Scripts\Activate.ps1
+python -m uvicorn app.main:app --app-dir backend --reload --port 8000
+```
+
+Wait for `Application startup complete` before starting the frontend.
+
+### 5. Start the frontend
+
+Open a second PowerShell terminal:
+
+```powershell
+cd D:\Dayflow
+$env:VITE_API_BASE_URL="http://localhost:8000/api/v1"
+pnpm --dir frontend run dev
+```
+
+Open the following URLs:
+
+- Dayflow: <http://localhost:5173>
+- API documentation: <http://localhost:8000/docs>
+- API readiness: <http://localhost:8000/api/v1/health/ready>
+
+Keep both terminals open while using Dayflow. Press `Ctrl+C` in each terminal to stop the services.
+
+## Run with Docker and PostgreSQL
+
+After installing Docker Desktop and creating `.env` from `.env.example`:
+
+```powershell
+cd D:\Dayflow
+docker compose up --build
+docker compose exec backend python -m app.seed
+```
+
+Compose applies Alembic migrations before starting the API. Stop the stack with `docker compose down`.
+
+The browser keeps access JWTs only in memory. Session restoration and renewal use the backend's rotating HTTP-only refresh cookie; Dayflow does not persist authentication tokens in browser storage.
 
 The browser keeps access JWTs only in memory. Session restoration and renewal use the backend's rotating HTTP-only refresh cookie; Dayflow does not persist authentication tokens in browser storage.
 
