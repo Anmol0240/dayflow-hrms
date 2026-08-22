@@ -6,6 +6,9 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import { ToastProvider } from "../src/components/ui/ToastProvider";
+import { FormField } from "../src/components/forms/FormField";
+import { ConfirmDialog } from "../src/components/ui/ConfirmDialog";
+import { Input } from "../src/components/ui/Input";
 import { QueryState } from "../src/components/ui/QueryState";
 import { EmployeeAttendancePage } from "../src/features/attendance/EmployeeAttendancePage";
 import { attendanceApi } from "../src/features/attendance/api";
@@ -30,6 +33,33 @@ function renderPage(element: ReactNode) {
 }
 
 describe("feature actions", () => {
+  it("associates form errors with their controls", () => {
+    render(
+      <FormField error="Enter a valid value" htmlFor="accessible-field" label="Example" required>
+        <Input id="accessible-field" />
+      </FormField>,
+    );
+    const input = screen.getByLabelText(/Example/);
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(input).toHaveAttribute("aria-required", "true");
+    expect(input).toHaveAccessibleDescription("Enter a valid value");
+  });
+
+  it("closes a confirmation dialog with Escape", async () => {
+    const cancel = vi.fn();
+    render(
+      <ConfirmDialog
+        description="Keyboard users can close this dialog."
+        onCancel={cancel}
+        onConfirm={vi.fn()}
+        open
+        title="Accessible dialog"
+      />,
+    );
+    await userEvent.setup().keyboard("{Escape}");
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
   it("renders useful loading and retry states", async () => {
     const retry = vi.fn();
     const { rerender } = render(

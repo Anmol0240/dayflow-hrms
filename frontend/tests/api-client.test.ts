@@ -69,4 +69,78 @@ describe("API client", () => {
       { code: "VALIDATION_ERROR", fieldErrors: { email: ["Enter a valid email"] } },
     );
   });
+
+  it("does not expire the session when a renewed request is forbidden", async () => {
+    const onSessionExpired = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValueOnce(new Response(null, { status: 401 }))
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify(renewedSession), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ detail: "Forbidden", code: "FORBIDDEN" }), {
+            status: 403,
+            headers: { "Content-Type": "application/json" },
+          }),
+        ),
+    );
+    const client = new ApiClient();
+    client.onSessionExpired(onSessionExpired);
+
+    await expect(client.request("/reports/payroll")).rejects.toMatchObject({
+      status: 403,
+      code: "FORBIDDEN",
+    });
+    expect(onSessionExpired).not.toHaveBeenCalled();
+  });
+
+  it("expires the session when a renewed request is still unauthorized", async () => {
+    const onSessionExpired = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValueOnce(new Response(null, { status: 401 }))
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify(renewedSession), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+        .mockResolvedValueOnce(new Response(null, { status: 401 })),
+    );
+    const client = new ApiClient();
+    client.onSessionExpired(onSessionExpired);
+
+    await expect(client.request("/auth/me")).rejects.toMatchObject({ status: 401 });
+    expect(onSessionExpired).toHaveBeenCalledTimes(1);
+  });
+
+  it("expires the session when a renewed download is still unauthorized", async () => {
+    const onSessionExpired = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValueOnce(new Response(null, { status: 401 }))
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify(renewedSession), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+        .mockResolvedValueOnce(new Response(null, { status: 401 })),
+    );
+    const client = new ApiClient();
+    client.onSessionExpired(onSessionExpired);
+
+    await expect(client.download("/reports/export")).rejects.toMatchObject({ status: 401 });
+    expect(onSessionExpired).toHaveBeenCalledTimes(1);
+  });
 });
