@@ -47,13 +47,37 @@ Feature modules may use shared components, hooks, types, and the API client. Sha
 
 ## Security baseline
 
-- Short-lived access JWTs and rotating/revocable refresh tokens are planned; refresh tokens use HTTP-only, same-site cookies.
+- Short-lived access JWTs and rotating/revocable refresh tokens are implemented; refresh tokens use HTTP-only, same-site cookies and are stored only as SHA-256 hashes.
 - Passwords are hashed with Argon2 and never logged or returned.
-- Public signup cannot assign privileged roles in production.
+- Public signup cannot assign privileged roles in any environment.
 - CORS is an explicit environment allowlist.
 - Pydantic and database constraints validate data at multiple boundaries.
 - Payroll and employee-owned queries are scoped before data leaves the repository.
-- Sensitive mutations generate audit records.
+- Sensitive mutation services are structured for audit integration; the audit table is added with the HR domain schema in Phase 5.
+
+### Authentication boundaries
+
+Authentication endpoints delegate to `AuthService`, which owns account-state checks and token transitions. `UserRepository` and `AuthTokenRepository` contain identity queries and row-locking intent. Access JWTs carry a user ID, role, unique token ID, issuer, audience, issue time, and expiry; every protected request reloads the user so deactivation and role changes take effect immediately.
+
+Refresh tokens are opaque 256-bit values. Only their hashes are stored, tokens rotate on every renewal, and reuse of a revoked token revokes the active token family. Password resets revoke all refresh tokens. Email-verification and password-reset tokens are also random, hashed, expiring, and single-use.
+
+Email delivery is represented by an interface. The development adapter records only that delivery was requested and never logs raw tokens. A production mail or queue adapter can replace it without changing authentication business logic.
+
+## Backend foundation
+
+The FastAPI application factory owns validated settings and a `Database` instance through application state. Database engines are therefore created per application, dependencies resolve sessions from the active application, and the lifespan hook disposes the connection pool during shutdown. Production uses `postgresql+asyncpg`; `sqlite+aiosqlite` is supported for development and isolated tests.
+
+SQLAlchemy models inherit shared UUID primary-key and UTC timestamp mixins. Metadata uses deterministic names for indexes, unique constraints, checks, foreign keys, and primary keys so generated Alembic migrations remain stable across databases. Alembic imports the same metadata and settings and runs through an async engine in both PostgreSQL and SQLite environments.
+
+Cross-cutting HTTP behavior includes:
+
+- an explicit CORS allowlist with credentials and restricted methods and headers;
+- generated or validated request IDs propagated through `X-Request-ID`;
+- JSON structured logging with request correlation;
+- centralized handlers for application, validation, HTTP, database, and unexpected failures;
+- separate liveness and database-readiness endpoints.
+
+Every API error is serialized as `detail`, `code`, and `field_errors`. Validation responses omit submitted values, and unexpected exceptions are logged server-side without returning internal details.
 
 ## Scalability and operations
 
@@ -61,4 +85,4 @@ The stateless API can scale horizontally. Database pagination is cursor- or offs
 
 ## Incremental delivery boundaries
 
-The skeleton intentionally contains importable placeholders only. Each later phase must add its own migration, schemas, repositories, services, endpoints, UI, tests, and documentation together. A module is not complete until its authorization and failure paths are tested.
+The backend foundation and authentication module are implemented. Employee profile behavior and the remaining HR domain modules remain later-phase boundaries. Each later phase must add its own migration, schemas, repositories, services, endpoints, UI, tests, and documentation together. A module is not complete until its authorization and failure paths are tested.

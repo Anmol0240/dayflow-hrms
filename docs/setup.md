@@ -27,6 +27,15 @@ pnpm --dir frontend run dev
 
 For SQLite fallback, set `DAYFLOW_DATABASE_URL=sqlite+aiosqlite:///./data/dayflow.db`.
 
+Verify the running backend:
+
+```bash
+curl http://localhost:8000/api/v1/health/live
+curl http://localhost:8000/api/v1/health/ready
+```
+
+Public signup creates an unverified Employee account. Development email delivery is intentionally an abstraction and does not log secret tokens; automated tests replace it with an in-memory capture adapter. Seeded verified Admin, HR, and Employee accounts are added in Phase 8.
+
 ## Docker Compose
 
 ```bash
@@ -50,10 +59,16 @@ pnpm --dir frontend run build
 
 ## Migrations and seed data
 
-These commands become operational after their implementation phases:
+The Alembic environment and initial identity migration are operational. Apply them before using authentication endpoints:
 
 ```bash
 cd backend && python -m alembic upgrade head
+python -m alembic check
+```
+
+Seed loading remains a later phase:
+
+```bash
 python -m app.seed
 ```
 
@@ -63,3 +78,4 @@ python -m app.seed
 - If PostgreSQL is unavailable, use the documented SQLite URL for non-production work.
 - If browser API requests fail, verify `DAYFLOW_CORS_ORIGINS` and `VITE_API_BASE_URL` match the URLs actually in use.
 - Node.js and Docker are external prerequisites; the repository does not install system software.
+- A readiness failure with `DATABASE_UNAVAILABLE` means the API is running but cannot open a database connection; verify the URL, credentials, host, and migration service.
