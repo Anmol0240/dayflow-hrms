@@ -1,0 +1,76 @@
+name: dayflow
+
+x-backend-environment: &backend-environment
+  DAYFLOW_ENVIRONMENT: ${DAYFLOW_ENVIRONMENT:-development}
+  DAYFLOW_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-dayflow}:${POSTGRES_PASSWORD:-change-me}@db:5432/${POSTGRES_DB:-dayflow}
+  DAYFLOW_JWT_SECRET: ${DAYFLOW_JWT_SECRET:-replace-with-at-least-32-random-characters}
+  DAYFLOW_CORS_ORIGINS: ${DAYFLOW_CORS_ORIGINS:-http://localhost:5173}
+  DAYFLOW_SEED_ADMIN_EMAIL: ${DAYFLOW_SEED_ADMIN_EMAIL:-admin@dayflow.dev}
+  DAYFLOW_SEED_ADMIN_PASSWORD: ${DAYFLOW_SEED_ADMIN_PASSWORD:-DayflowDemo123!}
+  DAYFLOW_SEED_HR_EMAIL: ${DAYFLOW_SEED_HR_EMAIL:-hr@dayflow.dev}
+  DAYFLOW_SEED_HR_PASSWORD: ${DAYFLOW_SEED_HR_PASSWORD:-DayflowDemo123!}
+  DAYFLOW_SEED_EMPLOYEE_PASSWORD: ${DAYFLOW_SEED_EMPLOYEE_PASSWORD:-DayflowDemo123!}
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-dayflow}
+      POSTGRES_USER: ${POSTGRES_USER:-dayflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  migrate:
+    build:
+      context: ./backend
+    command: ["python", "-m", "alembic", "upgrade", "head"]
+    environment: *backend-environment
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  backend:
+    build:
+      context: ./backend
+    environment: *backend-environment
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health/ready', timeout=2)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000/api/v1}
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "5173:80"
+
+volumes:
+  postgres_data:

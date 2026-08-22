@@ -1,0 +1,11 @@
+.coverage
+.env
+.env.*
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+coverage.xml
+data/
+tests/
+*.db
+*.py[cod]

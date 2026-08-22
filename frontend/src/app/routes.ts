@@ -1,0 +1,26 @@
+export const routes = {
+  home: "/",
+  signIn: "/sign-in",
+  signUp: "/sign-up",
+  verifyEmail: "/verify-email",
+  forgotPassword: "/forgot-password",
+  resetPassword: "/reset-password",
+  employeeDashboard: "/employee/dashboard",
+  profile: "/profile",
+  editProfile: "/profile/edit",
+  attendance: "/attendance",
+  applyLeave: "/leave/apply",
+  leaveRequests: "/leave",
+  payroll: "/payroll",
+  notifications: "/notifications",
+  adminDashboard: "/admin/dashboard",
+  employees: "/admin/employees",
+  employeeDetails: "/admin/employees/:employeeId",
+  adminAttendance: "/admin/attendance",
+  leaveApprovals: "/admin/leave",
+  adminPayroll: "/admin/payroll",
+  reports: "/admin/reports",
+  adminNotifications: "/admin/notifications",
+} as const;
+
+export type AppRoute = (typeof routes)[keyof typeof routes];
