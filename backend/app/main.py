@@ -51,3 +51,4 @@ def create_application(settings: Settings | None = None) -> FastAPI:
 
 
 app = create_application()
+#main.py
